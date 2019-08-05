@@ -21,11 +21,6 @@ arduinoFFT FFT = arduinoFFT();		// FFT object
 int MY_ARRAY[]={0, 8, 16, 32, 48, 64, 96, 128, 160}; // default = standard pattern
 char count[]={0,0,0,0,0,0,0,0};
 char statel[]={1,1,1,1,1,1,1,1};
-int MY_MODE_1[]={0, 128, 192, 224, 240, 248, 252, 254, 255}; // standard pattern
-int MY_MODE_2[]={0, 128, 64, 32, 16, 8, 4, 2, 1}; // only peak pattern
-int MY_MODE_3[]={0, 128, 192, 160, 144, 136, 132, 130, 129}; // only peak +  bottom point
-int MY_MODE_4[]={0, 128, 192, 160, 208, 232, 244, 250, 253}; // one gap in the top , 3rd light onwards
-int MY_MODE_5[]={0, 1, 3, 7, 15, 31, 63, 127, 255}; // standard pattern, mirrored vertically
 
 double vReal[SAMPLES];
 double vImag[SAMPLES];
