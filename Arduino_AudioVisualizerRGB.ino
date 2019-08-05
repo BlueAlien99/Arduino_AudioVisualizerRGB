@@ -1,65 +1,51 @@
 #include <Adafruit_NeoPixel.h>
 #include <arduinoFFT.h>
-#include <SPI.h>
 
 #ifdef __AVR__
- #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
+	#include <avr/power.h>	// Required for 16 MHz Adafruit Trinket
 #endif
 
-#define SAMPLES 64            //Must be a power of 2
-#define PIN        6 // On Trinket or Gemma, suggest changing this to 1
-#define NUMPIXELS 8 // Popular NeoPixel ring size
-#define  xres 8      // Total number of  columns in the display, must be <= SAMPLES/2
-#define  yres 8       // Total number of  rows in the display
-
-const double samplingFrequency = 16000000.0/(13*SAMPLES); //Hz, must be less than 10000 due to ADC
-unsigned int sampling_period_us;
-unsigned long microseconds;
-#define SCL_INDEX 0x00
-#define SCL_TIME 0x01
-#define SCL_FREQUENCY 0x02
-#define SCL_PLOT 0x03
+#define SAMPLES 64		// Must be a power of 2
+#define RGB_PIN 6		// On Trinket or Gemma, suggest changing this to 1
+#define BTN_PIN 12
+#define NUMPIXELS 8		// Popular NeoPixel ring size
+#define yres 8			// Total number of rows in the display
 
 // When setting up the NeoPixel library, we tell it how many pixels,
 // and which pin to use to send signals. Note that for older NeoPixel
 // strips you might need to change the third parameter -- see the
 // strandtest example for more information on possible values.
-Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-arduinoFFT FFT = arduinoFFT();                                    // FFT object
-
+Adafruit_NeoPixel pixels(NUMPIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
+arduinoFFT FFT = arduinoFFT();		// FFT object
 
 int MY_ARRAY[]={0, 8, 16, 32, 48, 64, 96, 128, 160}; // default = standard pattern
-//int MY_ARRAY[]={0, 128, 192, 224, 240, 248, 252, 254, 255}; // default = standard pattern
+char count[]={0,0,0,0,0,0,0,0};
+char statel[]={1,1,1,1,1,1,1,1};
 int MY_MODE_1[]={0, 128, 192, 224, 240, 248, 252, 254, 255}; // standard pattern
 int MY_MODE_2[]={0, 128, 64, 32, 16, 8, 4, 2, 1}; // only peak pattern
 int MY_MODE_3[]={0, 128, 192, 160, 144, 136, 132, 130, 129}; // only peak +  bottom point
 int MY_MODE_4[]={0, 128, 192, 160, 208, 232, 244, 250, 253}; // one gap in the top , 3rd light onwards
 int MY_MODE_5[]={0, 1, 3, 7, 15, 31, 63, 127, 255}; // standard pattern, mirrored vertically
 
- 
 double vReal[SAMPLES];
 double vImag[SAMPLES];
-double data_avgs[xres];
+double data_avgs[NUMPIXELS];
 
 int yvalue;
 int displayvalue;
-int peaks[xres];
-const int buttonPin = 2;     // the number of the pushbutton pin
-const int ledPin =  13;      // the number of the LED pin
+int peaks[NUMPIXELS];
 int state = HIGH;             // the current reading from the input pin
 int previousState = LOW;   // the previous reading from the input pin
-int displaymode = 1;
+int displaymode = 0;
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
-
 
 void setup() {
     ADCSRA = 0b11100110;      // set ADC to free running mode and set pre-scalar to 32 (0xe5)
     ADMUX = 0b00000000;       // use pin A0 and external voltage reference
-    pinMode(ledPin, OUTPUT);
-    pinMode(buttonPin, INPUT);
+    pinMode(RGB_PIN, OUTPUT);
+    pinMode(BTN_PIN, INPUT);
     pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
-    sampling_period_us = round(1000000*(1.0/samplingFrequency));
   Serial.begin(115200);
   Serial.println("Ready");
     delay(50);            // wait to get reference voltage stabilized
@@ -76,7 +62,6 @@ void loop() {
       vImag[i] = 0;                         
     }
     // -- Sampling
-
  
     // ++ FFT
     FFT.Windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
@@ -84,13 +69,13 @@ void loop() {
     FFT.ComplexToMagnitude(vReal, vImag, SAMPLES);
     // -- FFT
     Serial.println("Computed magnitudes:");
-  PrintVector(vReal, (SAMPLES >> 1), SCL_FREQUENCY);
+  PrintVector(vReal, (SAMPLES >> 1), 2);
   //double x = FFT.MajorPeak(vReal, SAMPLES, samplingFrequency);
   //Serial.println(x, 6); //Print out what frequency is the most dominant.
 
     
     // ++ re-arrange FFT result to match with no. of columns on display ( xres )
-    int step = (SAMPLES/2)/xres; 
+    int step = (SAMPLES/2)/NUMPIXELS; 
     int c=0;
     for(int i=0; i<(SAMPLES/2); i+=step)  
     {
@@ -109,8 +94,9 @@ void loop() {
     // -- re-arrange FFT result to match with no. of columns on display ( xres )
 
     
-    // ++ send to display according measured value 
-    for(int i=0; i<xres; i++)
+    // ++ send to display according measured value
+    if(displaymode==0){ 
+    for(int i=0; i<NUMPIXELS; i++)
     {
       data_avgs[i] = constrain(data_avgs[i],0,64);            // set max & min values for buckets
       data_avgs[i] = map(data_avgs[i], 0, 64, 0, yres);        // remap averaged values to yres
@@ -128,11 +114,46 @@ void loop() {
   
       pixels.show();   // Send the updated pixel colors to the hardware.
      }
+    }
+    else if(displaymode==1){
+    	for(int i=0; i<NUMPIXELS; i++)
+    {
+      data_avgs[i] = constrain(data_avgs[i],0,64);            // set max & min values for buckets
+      data_avgs[i] = map(data_avgs[i], 0, 64, 0, yres);        // remap averaged values to yres
+      yvalue=data_avgs[i];
+
+
+      peaks[i] = peaks[i]-1;    // decay by one light
+      if (yvalue > peaks[i]) 
+          peaks[i] = yvalue ;
+      yvalue = peaks[i];    
+      displayvalue=MY_ARRAY[yvalue];
+
+      // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+      // Here we're using a moderately bright green color:
+      pixels.setPixelColor(i, pixels.Color(displayvalue*(statel[i]&0x1), displayvalue*(statel[i]&0x2), displayvalue*(statel[i]&0x4)));
+      if(!yvalue==0){
+      	count[i]++;
+      	if(count[i]>=50){
+      		count[i] = 0;
+      		statel[i]++;
+      		if(statel[i]>=8){
+      			statel[i]=1;
+      		}
+      	}
+      }
+  
+      pixels.show();   // Send the updated pixel colors to the hardware.
+     }
+    }
      // -- send to display according measured value 
      
-    //displayModeChange ();         // check if button pressed to change display mode
-    //delay(20); /* Repeat after delay */
+    displayModeChange ();         // check if button pressed to change display mode
 } 
+
+const double samplingFrequency = 16000000.0/(13*SAMPLES); //Hz, must be less than 10000 due to ADC
+unsigned int sampling_period_us = round(1000000*(1.0/samplingFrequency));
+unsigned long microseconds;
 
 void PrintVector(double *vData, uint16_t bufferSize, uint8_t scaleType)
 {
@@ -142,18 +163,18 @@ void PrintVector(double *vData, uint16_t bufferSize, uint8_t scaleType)
     /* Print abscissa value */
     switch (scaleType)
     {
-      case SCL_INDEX:
+      case 0://index
         abscissa = (i * 1.0);
   break;
-      case SCL_TIME:
+      case 1://time
         abscissa = ((i * 1.0) / samplingFrequency);
   break;
-      case SCL_FREQUENCY:
+      case 2://frequency
         abscissa = ((i * 1.0 * samplingFrequency) / SAMPLES);
   break;
     }
     Serial.print(abscissa, 6);
-    if(scaleType==SCL_FREQUENCY)
+    if(scaleType==2)
       Serial.print("Hz");
     Serial.print(" ");
     Serial.println(vData[i], 4);
@@ -162,7 +183,24 @@ void PrintVector(double *vData, uint16_t bufferSize, uint8_t scaleType)
 }
 
 void displayModeChange() {
-  int reading = digitalRead(buttonPin);
+  int reading = digitalRead(BTN_PIN);
+  if (reading == HIGH && previousState == LOW && millis() - lastDebounceTime > debounceDelay) // works only when pressed
+  {
+   switch (displaymode) {
+    case 0:    //       move from mode 1 to 2
+      displaymode = 1;
+      break;
+    case 1:    //       move from mode 2 to 3
+      displaymode = 0;
+      break;
+   }
+    lastDebounceTime = millis();
+  }
+  previousState = reading;
+}
+
+/*void displayModeChange() {
+  int reading = digitalRead(BTN_PIN);
   if (reading == HIGH && previousState == LOW && millis() - lastDebounceTime > debounceDelay) // works only when pressed
   
   {
@@ -203,4 +241,4 @@ void displayModeChange() {
     lastDebounceTime = millis();
   }
   previousState = reading;
-}
+}*/
