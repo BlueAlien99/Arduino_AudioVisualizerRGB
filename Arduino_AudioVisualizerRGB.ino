@@ -35,18 +35,16 @@ int displaymode = 0;
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
 
-void setup() {
-    ADCSRA = 0b11100110;      // set ADC to free running mode and set pre-scalar to 32 (0xe5)
-    ADMUX = 0b00000000;       // use pin A0 and external voltage reference
-    pinMode(RGB_PIN, OUTPUT);
-    pinMode(BTN_PIN, INPUT);
-    pixels.begin(); // INITIALIZE NeoPixel strip object (REQUIRED)
-  Serial.begin(115200);
-  Serial.println("Ready");
-    delay(50);            // wait to get reference voltage stabilized
+void setup(){
+	ADCSRA = 0b11100110;		// set ADC to free running mode and set pre-scalar to 32 (0xe5)
+	ADMUX = 0b00000000;			// use pin A0 and external voltage reference
+	pinMode(RGB_PIN, OUTPUT);
+	pinMode(BTN_PIN, INPUT);
+	pixels.begin();				// INITIALIZE NeoPixel strip object (REQUIRED)
+	delay(50);					// wait to get reference voltage stabilized
 }
- 
-void loop() {
+
+void loop(){
    // ++ Sampling
    for(int i=0; i<SAMPLES; i++)
     {
@@ -63,11 +61,6 @@ void loop() {
     FFT.Compute(vReal, vImag, SAMPLES, FFT_FORWARD);
     FFT.ComplexToMagnitude(vReal, vImag, SAMPLES);
     // -- FFT
-    Serial.println("Computed magnitudes:");
-  PrintVector(vReal, (SAMPLES >> 1), 2);
-  //double x = FFT.MajorPeak(vReal, SAMPLES, samplingFrequency);
-  //Serial.println(x, 6); //Print out what frequency is the most dominant.
-
     
     // ++ re-arrange FFT result to match with no. of columns on display ( xres )
     int step = (SAMPLES/2)/NUMPIXELS; 
@@ -78,19 +71,13 @@ void loop() {
       for (int k=0 ; k< step ; k++) {
           //data_avgs[c] = data_avgs[c] + vReal[i+k];
           data_avgs[c] = max(data_avgs[c], (int)vReal[i+k]);
-          if(i==0){
-            Serial.println(data_avgs[c]);
-          }
       }
-      //Serial.println(data_avgs[c], 6);
       //data_avgs[c] = data_avgs[c]/step; 
       c++;
     }
     // -- re-arrange FFT result to match with no. of columns on display ( xres )
-
     
     // ++ send to display according measured value
-    if(displaymode==0){ 
     for(int i=0; i<NUMPIXELS; i++)
     {
       data_avgs[i] = constrain(data_avgs[i],0,64);            // set max & min values for buckets
@@ -103,79 +90,32 @@ void loop() {
       yvalue = peaks[i];    
       displayvalue=MY_ARRAY[yvalue];
 
-      // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
-      // Here we're using a moderately bright green color:
-      pixels.setPixelColor(i, pixels.Color(displayvalue, 0, displayvalue));
-  
-      pixels.show();   // Send the updated pixel colors to the hardware.
-     }
-    }
-    else if(displaymode==1){
-    	for(int i=0; i<NUMPIXELS; i++)
-    {
-      data_avgs[i] = constrain(data_avgs[i],0,64);            // set max & min values for buckets
-      data_avgs[i] = map(data_avgs[i], 0, 64, 0, yres);        // remap averaged values to yres
-      yvalue=data_avgs[i];
-
-
-      peaks[i] = peaks[i]-1;    // decay by one light
-      if (yvalue > peaks[i]) 
-          peaks[i] = yvalue ;
-      yvalue = peaks[i];    
-      displayvalue=MY_ARRAY[yvalue];
-
-      // pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
-      // Here we're using a moderately bright green color:
-      pixels.setPixelColor(i, pixels.Color(displayvalue*(statel[i]&0x1), displayvalue*(statel[i]&0x2), displayvalue*(statel[i]&0x4)));
-      if(!yvalue==0){
-      	count[i]++;
-      	if(count[i]>=50){
-      		count[i] = 0;
-      		statel[i]++;
-      		if(statel[i]>=8){
-      			statel[i]=1;
+		if(displaymode==0){
+			// pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+  		    // Here we're using a moderately bright green color:
+     		 pixels.setPixelColor(i, pixels.Color(displayvalue, 0, displayvalue));
+		} else if(displaymode==1){
+			// pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
+     		 // Here we're using a moderately bright green color:
+    		 pixels.setPixelColor(i, pixels.Color(displayvalue*(statel[i]&0x1), displayvalue*(statel[i]&0x2), displayvalue*(statel[i]&0x4)));
+   			 if(!yvalue==0){
+      			count[i]++;
+      			if(count[i]>=50){
+      				count[i] = 0;
+      				statel[i]++;
+      				if(statel[i]>=8){
+      					statel[i]=1;
+      				}
+      			}
       		}
-      	}
-      }
-  
+		}
+		
       pixels.show();   // Send the updated pixel colors to the hardware.
      }
-    }
      // -- send to display according measured value 
      
     displayModeChange ();         // check if button pressed to change display mode
 } 
-
-const double samplingFrequency = 16000000.0/(13*SAMPLES); //Hz, must be less than 10000 due to ADC
-unsigned int sampling_period_us = round(1000000*(1.0/samplingFrequency));
-unsigned long microseconds;
-
-void PrintVector(double *vData, uint16_t bufferSize, uint8_t scaleType)
-{
-  for (uint16_t i = 0; i < bufferSize; i++)
-  {
-    double abscissa;
-    /* Print abscissa value */
-    switch (scaleType)
-    {
-      case 0://index
-        abscissa = (i * 1.0);
-  break;
-      case 1://time
-        abscissa = ((i * 1.0) / samplingFrequency);
-  break;
-      case 2://frequency
-        abscissa = ((i * 1.0 * samplingFrequency) / SAMPLES);
-  break;
-    }
-    Serial.print(abscissa, 6);
-    if(scaleType==2)
-      Serial.print("Hz");
-    Serial.print(" ");
-    Serial.println(vData[i], 4);
-  }
-  Serial.println();
-}
 
 void displayModeChange() {
   int reading = digitalRead(BTN_PIN);
