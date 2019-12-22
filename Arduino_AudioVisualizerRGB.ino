@@ -8,7 +8,7 @@
 #define SAMPLES 64		// Must be a power of 2
 #define RGB_PIN 6		// On Trinket or Gemma, suggest changing this to 1
 #define BTN_PIN 12
-#define NUMPIXELS 8		// Popular NeoPixel ring size
+#define NUMPIXELS 32	// Popular NeoPixel ring size
 #define yres 8			// Total number of rows in the display
 
 // When setting up the NeoPixel library, we tell it how many pixels,
@@ -18,9 +18,10 @@
 Adafruit_NeoPixel pixels(NUMPIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 arduinoFFT FFT = arduinoFFT();		// FFT object
 
-int MY_ARRAY[]={0, 8, 16, 32, 48, 64, 96, 128, 160}; // default = standard pattern
-char count[]={0,0,0,0,0,0,0,0};
-char statel[]={1,1,1,1,1,1,1,1};
+char MY_ARRAY[]={0, 8, 16, 32, 48, 64, 96, 128, 160}; // default = standard pattern
+double ratio[] = {1, 0.86, 0.72, 0.58, 0.44, 0.30, 0.15, 0};
+char count[NUMPIXELS];
+char statel[NUMPIXELS];
 
 double vReal[SAMPLES];
 double vImag[SAMPLES];
@@ -91,10 +92,14 @@ void loop(){
       displayvalue=MY_ARRAY[yvalue];
 
 		if(displaymode==0){
+			pixels.setPixelColor(i, pixels.Color(displayvalue*ratio[i], displayvalue*ratio[NUMPIXELS-i]/2, displayvalue));
+		}
+		else if(displaymode==1){
 			// pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
   		    // Here we're using a moderately bright green color:
      		 pixels.setPixelColor(i, pixels.Color(displayvalue, 0, displayvalue));
-		} else if(displaymode==1){
+		}
+		else if(displaymode==1){
 			// pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
      		 // Here we're using a moderately bright green color:
     		 pixels.setPixelColor(i, pixels.Color(displayvalue*(statel[i]&0x1), displayvalue*(statel[i]&0x2), displayvalue*(statel[i]&0x4)));
@@ -125,7 +130,14 @@ void displayModeChange() {
     case 0:    //       move from mode 1 to 2
       displaymode = 1;
       break;
-    case 1:    //       move from mode 2 to 3
+	case 1:    //       move from mode 1 to 2
+      displaymode = 2;
+      break;
+    case 2:    //       move from mode 2 to 3
+    	for(int i = 0; i < NUMPIXELS; ++i){
+    		count[i] = 0;
+    		statel[i] = 1;
+    	}
       displaymode = 0;
       break;
    }
