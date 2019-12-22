@@ -19,7 +19,8 @@ Adafruit_NeoPixel pixels(NUMPIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 arduinoFFT FFT = arduinoFFT();		// FFT object
 
 char MY_ARRAY[]={0, 8, 16, 32, 48, 64, 96, 128, 160}; // default = standard pattern
-double ratio[] = {1, 0.86, 0.72, 0.58, 0.44, 0.30, 0.15, 0};
+//double ratio[] = {1, 0.86, 0.72, 0.58, 0.44, 0.30, 0.15, 0};
+double ratio = 1.0/NUMPIXELS;
 char count[NUMPIXELS];
 char statel[NUMPIXELS];
 
@@ -92,7 +93,7 @@ void loop(){
       displayvalue=MY_ARRAY[yvalue];
 
 		if(displaymode==0){
-			pixels.setPixelColor(i, pixels.Color(displayvalue*ratio[i], displayvalue*ratio[NUMPIXELS-i]/2, displayvalue));
+			pixels.setPixelColor(i, pixels.Color(displayvalue*(1-ratio*i), displayvalue*ratio*i/2, displayvalue));
 		}
 		else if(displaymode==1){
 			// pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
