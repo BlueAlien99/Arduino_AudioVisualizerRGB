@@ -9,7 +9,7 @@
 #define RGB_PIN 6		// On Trinket or Gemma, suggest changing this to 1
 #define BTN_PIN 12
 #define NUMPIXELS 32	// Popular NeoPixel ring size
-#define yres 8			// Total number of rows in the display
+#define yres 15			// Total number of rows in the display -1 !!!
 
 // When setting up the NeoPixel library, we tell it how many pixels,
 // and which pin to use to send signals. Note that for older NeoPixel
@@ -18,7 +18,8 @@
 Adafruit_NeoPixel pixels(NUMPIXELS, RGB_PIN, NEO_GRB + NEO_KHZ800);
 arduinoFFT FFT = arduinoFFT();		// FFT object
 
-char MY_ARRAY[]={0, 8, 16, 32, 48, 64, 96, 128, 160}; // default = standard pattern
+unsigned char MY_ARRAY[]={0, 2, 4, 8, 12, 16, 24, 32, 48, 64, 80, 96, 112, 128, 144, 160}; // default = standard pattern
+unsigned char MY_ARRAY_SOOTHING[]={4, 6, 8, 10, 12, 16, 24, 32, 48, 64, 80, 96, 112, 128, 144, 160};
 //double ratio[] = {1, 0.86, 0.72, 0.58, 0.44, 0.30, 0.15, 0};
 double ratio = 1.0/NUMPIXELS;
 char count[NUMPIXELS];
@@ -44,6 +45,7 @@ void setup(){
 	pinMode(BTN_PIN, INPUT);
 	pixels.begin();				// INITIALIZE NeoPixel strip object (REQUIRED)
 	delay(50);					// wait to get reference voltage stabilized
+ //Serial.begin(9600);
 }
 
 void loop(){
@@ -63,7 +65,8 @@ void loop(){
     FFT.Compute(vReal, vImag, SAMPLES, FFT_FORWARD);
     FFT.ComplexToMagnitude(vReal, vImag, SAMPLES);
     // -- FFT
-    
+
+    double maxval = 0;
     // ++ re-arrange FFT result to match with no. of columns on display ( xres )
     int step = (SAMPLES/2)/NUMPIXELS; 
     int c=0;
@@ -73,18 +76,29 @@ void loop(){
       for (int k=0 ; k< step ; k++) {
           //data_avgs[c] = data_avgs[c] + vReal[i+k];
           data_avgs[c] = max(data_avgs[c], (int)vReal[i+k]);
+          maxval = max(maxval, data_avgs[c]);
       }
       //data_avgs[c] = data_avgs[c]/step; 
       c++;
     }
     // -- re-arrange FFT result to match with no. of columns on display ( xres )
-    
+
+    maxval = constrain(maxval,0,64);
+    if(maxval < 5){
+      maxval = 64;
+    }
+        
     // ++ send to display according measured value
     for(int i=0; i<NUMPIXELS; i++)
     {
-      data_avgs[i] = constrain(data_avgs[i],0,64);            // set max & min values for buckets
-      data_avgs[i] = map(data_avgs[i], 0, 64, 0, yres);        // remap averaged values to yres
+      data_avgs[i] = constrain(data_avgs[i],0,maxval);            // set max & min values for buckets
+      data_avgs[i] = map(data_avgs[i], 0, maxval, 0, yres);        // remap averaged values to yres
       yvalue=data_avgs[i];
+
+      if((displaymode == 0 || displaymode == 3) && i > 5){
+        //yvalue = (double)yvalue * (1 + (1*(double)(i-8)/NUMPIXELS));
+        yvalue = min(yvalue*2, yres);
+      }
 
       peaks[i] = peaks[i]-1;    // decay by one light
       if (yvalue > peaks[i]) 
@@ -92,15 +106,47 @@ void loop(){
       yvalue = peaks[i];    
       displayvalue=MY_ARRAY[yvalue];
 
-		if(displaymode==0){
+   /*   if(i == 0){
+        Serial.print("\n");
+                
+        Serial.print((int)(displayvalue*multip));
+        Serial.print("\t");
+      }
+      if(i == 1 || i == 2){
+        Serial.print((int)(displayvalue*multip));
+        Serial.print("\t");
+      }
+      if(i == 31 || i == 30 || i == 29){
+        Serial.print((int)(displayvalue*multip));
+        Serial.print("\t");
+      }
+      if(i == 31){
+        Serial.print(peaks[i]);
+                Serial.print("\t");
+      }*/
+
+		if(displaymode==2){
 			pixels.setPixelColor(i, pixels.Color(displayvalue*(1-ratio*i), displayvalue*ratio*i/2, displayvalue));
 		}
+   if(displaymode==3){      
+      int R = min(displayvalue*(1-ratio*i), 160);
+      int G = min(displayvalue*ratio*i/2, 160);
+      int B = min(displayvalue, 160);
+     pixels.setPixelColor(i, pixels.Color(R, G, B));
+    }
+    if(displaymode==0){
+      displayvalue = MY_ARRAY_SOOTHING[yvalue];
+      int R = min(displayvalue*(1-ratio*i), 160);
+      int G = min(displayvalue*ratio*i/2, 160);
+      int B = min(displayvalue, 160);
+     pixels.setPixelColor(i, pixels.Color(R, G, B));
+    }
 		else if(displaymode==1){
 			// pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
   		    // Here we're using a moderately bright green color:
      		 pixels.setPixelColor(i, pixels.Color(displayvalue, 0, displayvalue));
 		}
-		else if(displaymode==1){
+		else if(displaymode==4){
 			// pixels.Color() takes RGB values, from 0,0,0 up to 255,255,255
      		 // Here we're using a moderately bright green color:
     		 pixels.setPixelColor(i, pixels.Color(displayvalue*(statel[i]&0x1), displayvalue*(statel[i]&0x2), displayvalue*(statel[i]&0x4)));
@@ -131,10 +177,16 @@ void displayModeChange() {
     case 0:    //       move from mode 1 to 2
       displaymode = 1;
       break;
-	case 1:    //       move from mode 1 to 2
+   case 1:    //       move from mode 1 to 2
       displaymode = 2;
       break;
-    case 2:    //       move from mode 2 to 3
+	case 2:    //       move from mode 1 to 2
+      displaymode = 3;
+      break;
+      case 3:    //       move from mode 1 to 2
+      displaymode = 4;
+      break;
+    case 4:    //       move from mode 2 to 3
     	for(int i = 0; i < NUMPIXELS; ++i){
     		count[i] = 0;
     		statel[i] = 1;
